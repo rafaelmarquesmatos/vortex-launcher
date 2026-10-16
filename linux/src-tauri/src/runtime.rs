@@ -229,7 +229,7 @@ fn wine_command(wine_bin: &Path, gamemode: bool) -> Command {
     }
 }
 
-fn runner_on_path() -> bool {
+pub(crate) fn runner_on_path() -> bool {
     let Ok(path) = std::env::var("PATH") else {
         return false;
     };

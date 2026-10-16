@@ -16,4 +16,6 @@ linux/studio/**
 !linux/studio/.gitkeep
 linux/wine/**
 linux/dxvk/**
+linux/vkd3d/**
 linux/update/**
+linux/instance.sock

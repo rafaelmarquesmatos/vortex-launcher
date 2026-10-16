@@ -207,14 +207,19 @@ cat > "$apps/vortex-launcher.desktop" <<EOF
 Type=Application
 Name=Vortex Launcher
 Comment=Launcher Linux para o Vortex
-Exec=$bin_dir/vortex-launcher
+Exec=$bin_dir/vortex-launcher %u
 Icon=$icon
 Terminal=false
 Categories=Game;
+MimeType=x-scheme-handler/vortex;x-scheme-handler/vortex-studio;
 EOF
 
 if command -v update-desktop-database >/dev/null 2>&1; then
   update-desktop-database "$apps" >/dev/null 2>&1 || true
+fi
+if command -v xdg-mime >/dev/null 2>&1; then
+  xdg-mime default vortex-launcher.desktop x-scheme-handler/vortex || true
+  xdg-mime default vortex-launcher.desktop x-scheme-handler/vortex-studio || true
 fi
 
 echo "Instalado. Abre pelo menu ou com: $bin_dir/vortex-launcher"

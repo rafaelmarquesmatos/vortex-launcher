@@ -14,9 +14,13 @@ const DXVK_URL: &str =
     "https://github.com/doitsujin/dxvk/releases/download/v3.1.1/dxvk-3.1.1.tar.gz";
 const DXVK_SHA: &str = "40565b4a724aadc4433fa4e010b4b23916d9b1f1baeee64e17186db94f54e608";
 const DXVK_VERSION: &str = "3.1.1";
+const VKD3D_URL: &str = "https://github.com/HansKristian-Work/vkd3d-proton/releases/download/v3.0.1/vkd3d-proton-3.0.1.tar.zst";
+const VKD3D_SHA: &str = "3cf2315522af5e43605ef6d3c41dad91387040bf97199934f3f7ab76caaa2f0c";
+const VKD3D_VERSION: &str = "3.0.1";
 const XZ_MAGIC: &[u8] = &[0xfd, b'7', b'z', b'X', b'Z', 0x00];
 const GZIP_MAGIC: &[u8] = &[0x1f, 0x8b];
 const ZIP_MAGIC: &[u8] = &[b'P', b'K', 3, 4];
+const ZST_MAGIC: &[u8] = &[0x28, 0xb5, 0x2f, 0xfd];
 
 static DOWNLOAD: Mutex<()> = Mutex::new(());
 
@@ -24,6 +28,7 @@ pub(crate) enum ArchiveKind {
     Xz,
     Gzip,
     Zip,
+    Zst,
 }
 
 pub(crate) fn lock_download() -> MutexGuard<'static, ()> {
@@ -70,7 +75,7 @@ pub fn binary(progress: &dyn Fn(&str, u8)) -> Result<PathBuf, String> {
         progress,
     )?;
     progress("A extrair o Wine", 0);
-    extract(&archive, &root, false)?;
+    extract(&archive, &root, ArchiveKind::Xz)?;
     let _ = fs::remove_file(&archive);
     progress("A extrair o Wine", 100);
     if bin.is_file() {
@@ -94,6 +99,7 @@ pub fn prepare_prefix(
     }
     if settings.dxvk {
         install_dxvk(prefix, progress)?;
+        install_vkd3d(prefix, progress)?;
     }
     Ok(())
 }
@@ -125,17 +131,10 @@ fn on_off(on: bool) -> String {
 }
 
 fn dll_overrides(settings: &Settings) -> Option<String> {
-    let mut parts = Vec::new();
-    if settings.vulkan {
-        parts.push("d3d12=");
-    }
     if settings.dxvk {
-        parts.push("d3d11,dxgi,d3d10core=n");
-    }
-    if parts.is_empty() {
-        None
+        Some("d3d11,dxgi,d3d10core=n;d3d12,d3d12core=n".to_string())
     } else {
-        Some(parts.join(";"))
+        None
     }
 }
 
@@ -180,13 +179,71 @@ fn ensure_dxvk_files(progress: &dyn Fn(&str, u8)) -> Result<PathBuf, String> {
         progress,
     )?;
     progress("A extrair o DXVK", 0);
-    extract(&archive, &root, true)?;
+    extract(&archive, &root, ArchiveKind::Gzip)?;
     let _ = fs::remove_file(&archive);
     progress("A extrair o DXVK", 100);
     if dlls.join("d3d11.dll").is_file() {
         Ok(dlls)
     } else {
         Err("DXVK em falta depois de extrair".to_string())
+    }
+}
+
+fn vkd3d_dlls() -> PathBuf {
+    tool_root("vkd3d")
+        .join(format!("vkd3d-proton-{VKD3D_VERSION}"))
+        .join("x64")
+}
+
+fn install_vkd3d(prefix: &Path, progress: &dyn Fn(&str, u8)) -> Result<(), String> {
+    let system32 = prefix.join("drive_c/windows/system32");
+    let stamp = prefix.join("vkd3d-version");
+    if fs::read_to_string(&stamp).ok().as_deref() == Some(VKD3D_VERSION)
+        && system32.join("d3d12.dll").is_file()
+        && system32.join("d3d12core.dll").is_file()
+    {
+        return Ok(());
+    }
+    let dlls = ensure_vkd3d_files(progress)?;
+    progress("A instalar o vkd3d-proton", 0);
+    fs::create_dir_all(&system32).map_err(|err| err.to_string())?;
+    for name in ["d3d12.dll", "d3d12core.dll"] {
+        fs::copy(dlls.join(name), system32.join(name)).map_err(|err| format!("{name}: {err}"))?;
+    }
+    fs::write(&stamp, VKD3D_VERSION).map_err(|err| err.to_string())?;
+    progress("A instalar o vkd3d-proton", 100);
+    Ok(())
+}
+
+fn ensure_vkd3d_files(progress: &dyn Fn(&str, u8)) -> Result<PathBuf, String> {
+    if vkd3d_dlls().join("d3d12.dll").is_file() {
+        return Ok(vkd3d_dlls());
+    }
+    let _guard = lock_download();
+    let dlls = vkd3d_dlls();
+    if dlls.join("d3d12.dll").is_file() {
+        return Ok(dlls);
+    }
+    let root = tool_root("vkd3d");
+    fs::create_dir_all(&root).map_err(|err| err.to_string())?;
+    let archive = root.join("vkd3d-proton.tar.zst");
+    save_download(
+        VKD3D_URL,
+        &archive,
+        "A baixar o vkd3d-proton",
+        ArchiveKind::Zst,
+        Some(VKD3D_SHA),
+        "vkd3d-proton",
+        progress,
+    )?;
+    progress("A extrair o vkd3d-proton", 0);
+    extract(&archive, &root, ArchiveKind::Zst)?;
+    let _ = fs::remove_file(&archive);
+    progress("A extrair o vkd3d-proton", 100);
+    if dlls.join("d3d12.dll").is_file() && dlls.join("d3d12core.dll").is_file() {
+        Ok(dlls)
+    } else {
+        Err("vkd3d-proton em falta depois de extrair".to_string())
     }
 }
 
@@ -293,6 +350,7 @@ fn check_download(done: u64, total: u64, header: &[u8], kind: ArchiveKind) -> Re
         ArchiveKind::Xz => header.starts_with(XZ_MAGIC),
         ArchiveKind::Gzip => header.starts_with(GZIP_MAGIC),
         ArchiveKind::Zip => header.starts_with(ZIP_MAGIC),
+        ArchiveKind::Zst => header.starts_with(ZST_MAGIC),
     };
     if ok {
         Ok(())
@@ -373,9 +431,17 @@ fn sha256(path: &Path) -> Result<String, String> {
         .ok_or_else(|| "não deu para ler o hash".to_string())
 }
 
-fn extract(archive: &Path, dest: &Path, gzip: bool) -> Result<(), String> {
+fn extract(archive: &Path, dest: &Path, kind: ArchiveKind) -> Result<(), String> {
     fs::create_dir_all(dest).map_err(|err| err.to_string())?;
-    let flag = if gzip { "-xzf" } else { "-xJf" };
+    // shortcut: zstd via `tar -xf`; needs a tar that opens zst, which Fedora has
+    let flag = match kind {
+        ArchiveKind::Xz => "-xJf",
+        ArchiveKind::Gzip => "-xzf",
+        ArchiveKind::Zip => {
+            return Err("zip não se extrai com tar".to_string());
+        }
+        ArchiveKind::Zst => "-xf",
+    };
     let output = Command::new("tar")
         .arg(flag)
         .arg(archive)
@@ -418,6 +484,7 @@ mod tests {
     fn xz_and_gzip_magic_pass() {
         assert!(check_download(6, 6, &[0xfd, b'7', b'z', b'X', b'Z', 0], ArchiveKind::Xz).is_ok());
         assert!(check_download(2, 2, &[0x1f, 0x8b], ArchiveKind::Gzip).is_ok());
+        assert!(check_download(4, 4, &[0x28, 0xb5, 0x2f, 0xfd], ArchiveKind::Zst).is_ok());
     }
 
     #[test]
@@ -449,10 +516,11 @@ mod tests {
         };
         let env = win_env(&settings);
         assert!(env.contains(&("WGPU_BACKEND", "vulkan".to_string())));
-        assert!(env.contains(&(
-            "WINEDLLOVERRIDES",
-            "d3d12=;d3d11,dxgi,d3d10core=n".to_string()
-        )));
+        let overrides = env
+            .iter()
+            .find(|(key, _)| *key == "WINEDLLOVERRIDES")
+            .map(|(_, value)| value.as_str());
+        assert_eq!(overrides, Some("d3d11,dxgi,d3d10core=n;d3d12,d3d12core=n"));
         assert!(env.contains(&("WINEESYNC", "1".to_string())));
         assert!(env.contains(&("WINEFSYNC", "1".to_string())));
     }

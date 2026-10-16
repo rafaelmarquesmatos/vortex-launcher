@@ -1,6 +1,8 @@
 mod discord;
+mod doctor;
 mod paths;
 mod runtime;
+mod scheme;
 mod settings;
 mod update;
 mod wine;
@@ -44,12 +46,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let primary = scheme::claim();
     tauri::Builder::default()
         .register_uri_scheme_protocol("launcher", |_ctx, request| {
             let uri = request.uri();
             settings::respond(uri.path(), uri.query().unwrap_or(""))
         })
-        .setup(|app| {
+        .setup(move |app| {
+            scheme::register();
+            let scheme::Primary { listener, pending } = primary;
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -104,6 +109,22 @@ pub fn run() {
             } else {
                 spawn_update(main.app_handle().clone());
             }
+            let app_handle = main.app_handle().clone();
+            if let Some(listener) = listener {
+                let background = app_handle.clone();
+                std::thread::spawn(move || {
+                    for conn in listener.incoming().flatten() {
+                        match scheme::incoming(conn) {
+                            Some(scheme::Incoming::Focus) => show_main(&background),
+                            Some(scheme::Incoming::Launch(url)) => open_url(&background, &url),
+                            None => {}
+                        }
+                    }
+                });
+            }
+            if let Some(url) = pending {
+                open_url(&app_handle, &url);
+            }
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -151,18 +172,22 @@ fn take_url<R: tauri::Runtime>(handle: &tauri::AppHandle<R>, url: &str) -> bool 
         return true;
     }
     if runtime::launch_scheme(url).is_some() {
-        let studio = url.starts_with("vortex-studio://");
-        spawn_launch(
-            handle.clone(),
-            url.to_string(),
-            url.starts_with("vortex://"),
-        );
-        if studio {
-            go_home(handle);
-        }
+        open_url(handle, url);
         return true;
     }
     false
+}
+
+fn open_url<R: tauri::Runtime>(handle: &tauri::AppHandle<R>, url: &str) {
+    let studio = url.starts_with("vortex-studio://");
+    spawn_launch(
+        handle.clone(),
+        url.to_string(),
+        url.starts_with("vortex://"),
+    );
+    if studio {
+        go_home(handle);
+    }
 }
 
 fn prepare_wine_then_open<R: tauri::Runtime>(handle: tauri::AppHandle<R>) {
@@ -190,11 +215,18 @@ fn spawn_update<R: tauri::Runtime>(handle: tauri::AppHandle<R>) {
             move |label: &str, percent: u8| set_progress(&ui, label, percent)
         };
         match update::check(&report) {
-            Ok(Some(path)) => set_progress(
-                &handle,
-                &format!("Atualização baixada em {}", path.display()),
-                100,
-            ),
+            Ok(Some(path)) => match update::apply(&path) {
+                Ok(update::Applied::Restarting) => handle.exit(0),
+                Ok(update::Applied::Saved(path)) => set_progress(
+                    &handle,
+                    &format!("Atualização baixada em {}", path.display()),
+                    100,
+                ),
+                Err(err) => {
+                    eprintln!("update: {err}");
+                    set_progress(&handle, &format!("Falhou: {err}"), 0);
+                }
+            },
             Ok(None) => {}
             Err(err) => eprintln!("update: {err}"),
         }
@@ -222,6 +254,7 @@ fn spawn_launch<R: tauri::Runtime>(handle: tauri::AppHandle<R>, url: String, ins
                 return;
             }
         };
+        discord::playing(&discord::details_for(&url));
         if instance {
             let current = settings::load();
             if current.close_launcher_on_instance {
@@ -241,6 +274,7 @@ fn spawn_launch<R: tauri::Runtime>(handle: tauri::AppHandle<R>, url: String, ins
             if current.close_launcher_on_instance || current.open_client_on_instance_exit {
                 show_main(&handle);
             }
+            discord::idle();
             return;
         }
         let current = settings::load();
@@ -251,6 +285,7 @@ fn spawn_launch<R: tauri::Runtime>(handle: tauri::AppHandle<R>, url: String, ins
         if current.close_launcher_on_studio {
             show_main(&handle);
         }
+        discord::idle();
     });
 }
 

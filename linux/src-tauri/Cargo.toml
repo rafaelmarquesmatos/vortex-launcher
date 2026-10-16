@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "0.1.1"
+version = "0.1.2"
 description = "Launcher Linux para o Vortex"
 repository = "https://github.com/rafaelmarquesmatos/vortex-launcher"
 edition = "2024"

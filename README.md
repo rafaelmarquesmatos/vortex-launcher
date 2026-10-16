@@ -19,7 +19,8 @@ Wine, cliente e Studio ficam em `~/.local/share/vortex-launcher`. Quem roda a pa
 - Mostra o site em [https://playvortex.io](https://playvortex.io).
 - Baixa e atualiza o cliente e o Studio, cada um com o seu prefixo Wine.
 - Na primeira abertura, baixa e extrai o Wine antes de mostrar o site.
-- Instala o DXVK no prefixo na primeira vez que um jogo ou o Studio abre.
+- Instala o DXVK e o vkd3d-proton no prefixo na primeira vez que um jogo ou o Studio abre.
+- Regista `vortex://` e `vortex-studio://` para o Play funcionar fora da janela.
 - A barra de baixo troca entre o site e a Config.
 
 
@@ -64,10 +65,11 @@ A página Config guarda as opções em `settings.json`, na pasta de dados. Quem 
 | Grupo       | Opções                                                                                         |
 | ----------- | ---------------------------------------------------------------------------------------------- |
 | Launcher    | Fechar ao abrir uma instância, fechar ao abrir o Studio, voltar ao launcher ao sair da partida |
-| Gráficos    | Vulkan, DXVK                                                                                   |
+| Gráficos    | Vulkan, DXVK, vkd3d-proton                                                                     |
 | Wine        | Esync, Fsync, GameMode                                                                         |
 | Atualização | Versão instalada. Ao abrir, procura uma release mais nova                                      |
-| Discord     | Client ID. Vazio, a presença fica desligada. Preenchido, o Discord mostra Vortex Launcher      |
+| Discord     | Client ID. Vazio, a presença fica desligada. Preenchido, o Discord mostra o jogo               |
+| Doctor      | Wine, Vulkan, DXVK, WebKit e GameMode. Só aparece a frase do que falta                         |
 
 
 
@@ -76,4 +78,4 @@ A página Config guarda as opções em `settings.json`, na pasta de dados. Quem 
 
 Ao abrir, o launcher pede a última release de [rafaelmarquesmatos/vortex-launcher](https://github.com/rafaelmarquesmatos/vortex-launcher/releases).
 
-Se a tag for mais nova e houver um asset com `linux` no nome (`.AppImage` ou `.tar.gz`), o arquivo vai para `update/` na mesma pasta de dados. Sem release, ou com tag igual, não mostra nada.
+Se a tag for mais nova, escolhe o asset Linux (AppImage antes de `.tar.gz`, `x86_64` antes do resto). Na cópia instalada, troca o binário, reescreve o atalho e abre de novo. A partir do código, o arquivo fica em `update/` e o programa não se substitui. Sem release, ou com tag igual, não mostra nada.

@@ -110,6 +110,17 @@ fn boot_page() -> String {
         .to_string()
 }
 
+fn doctor_html() -> String {
+    let lines = crate::doctor::phrases(crate::doctor::gather());
+    if lines.is_empty() {
+        return "<p class=\"desc\">Nada em falta.</p>".to_string();
+    }
+    lines
+        .iter()
+        .map(|line| format!("<p class=\"desc\">{line}</p>"))
+        .collect()
+}
+
 fn digits(value: &str) -> String {
     value.chars().filter(|c| c.is_ascii_digit()).collect()
 }
@@ -129,6 +140,7 @@ pub fn page(settings: &Settings) -> String {
     let gamemode = checked(settings.gamemode);
     let discord = &settings.discord_client_id;
     let version = crate::update::VERSION;
+    let doctor = doctor_html();
     format!(
         r#"<!DOCTYPE html>
 <html lang="pt">
@@ -183,8 +195,8 @@ pub fn page(settings: &Settings) -> String {
   <label class="row"><input id="studio" class="switch" type="checkbox" {studio}><span class="copy"><span>Fechar o launcher ao abrir o Studio</span><span class="desc">Esconde a janela quando o Studio abre e mostra de novo quando ele fecha.</span></span></label>
   <label class="row"><input id="open" class="switch" type="checkbox" {open}><span class="copy"><span>Ao sair da partida, fechar o Vortex e voltar ao launcher</span><span class="desc">Depois de uma partida, fecha o Vortex e traz o launcher de volta.</span></span></label>
   <h2>Gráficos</h2>
-  <label class="row"><input id="vulkan" class="switch" type="checkbox" {vulkan}><span class="copy"><span>Vulkan</span><span class="desc">O client desenha com Vulkan e deixa o Direct3D 12 desligado.</span></span></label>
-  <label class="row"><input id="dxvk" class="switch" type="checkbox" {dxvk}><span class="copy"><span>DXVK</span><span class="desc">Traduz Direct3D 11 para Vulkan dentro do prefixo.</span></span></label>
+  <label class="row"><input id="vulkan" class="switch" type="checkbox" {vulkan}><span class="copy"><span>Vulkan</span><span class="desc">O client prefere Vulkan. O Direct3D 12 passa pelo vkd3d-proton.</span></span></label>
+  <label class="row"><input id="dxvk" class="switch" type="checkbox" {dxvk}><span class="copy"><span>DXVK</span><span class="desc">Traduz Direct3D 11 para Vulkan e instala o vkd3d-proton no prefixo.</span></span></label>
   <h2>Wine</h2>
   <label class="row"><input id="esync" class="switch" type="checkbox" {esync}><span class="copy"><span>Esync</span><span class="desc">Sincroniza o Wine por eventfd. Serve na maior parte dos kernels.</span></span></label>
   <label class="row"><input id="fsync" class="switch" type="checkbox" {fsync}><span class="copy"><span>Fsync</span><span class="desc">Sincroniza o Wine por futex. Precisa de um kernel com futex2.</span></span></label>
@@ -192,7 +204,9 @@ pub fn page(settings: &Settings) -> String {
   <h2>Atualização</h2>
   <p class="desc">Versão {version}. Ao abrir, o launcher procura uma release mais nova no GitHub.</p>
   <h2>Discord</h2>
-  <label class="row"><span></span><span class="copy"><span>Client ID</span><span class="desc">Vazio, a presença fica desligada. Preenchido, o Discord mostra Vortex Launcher.</span><input id="discord" type="text" value="{discord}" inputmode="numeric"></span></label>
+  <label class="row"><span></span><span class="copy"><span>Client ID</span><span class="desc">Vazio, a presença fica desligada. Preenchido, o Discord mostra o jogo.</span><input id="discord" type="text" value="{discord}" inputmode="numeric"></span></label>
+  <h2>Doctor</h2>
+  {doctor}
 </main>
 <nav>
   <a href="https://playvortex.io">Vortex</a>
@@ -275,5 +289,16 @@ mod tests {
         update_from_query(&mut settings, "discord=");
         assert!(settings.gamemode);
         assert!(settings.discord_client_id.is_empty());
+    }
+
+    #[test]
+    fn config_has_doctor() {
+        let html = super::page(&Settings::default());
+        assert!(html.contains("<h2>Doctor</h2>"));
+        assert!(
+            html.contains("Nada em falta.")
+                || html.contains("Falta ")
+                || html.contains("O Wine ainda não foi baixado.")
+        );
     }
 }
