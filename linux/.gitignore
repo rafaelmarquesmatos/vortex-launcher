@@ -1,0 +1,14 @@
+node_modules
+src-tauri/target
+src-tauri/gen
+client/**
+!client/.gitkeep
+studio/**
+!studio/.gitkeep
+settings.json
+wine/**
+dxvk/**
+update/**
+*.partial
+.env
+.env.*
