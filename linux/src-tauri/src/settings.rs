@@ -44,9 +44,7 @@ impl Default for Settings {
 }
 
 fn settings_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("settings.json")
+    crate::paths::root().join("settings.json")
 }
 
 pub fn load() -> Settings {

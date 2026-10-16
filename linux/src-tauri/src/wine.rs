@@ -29,9 +29,8 @@ pub(crate) fn lock_download() -> MutexGuard<'static, ()> {
     DOWNLOAD.lock().unwrap_or_else(|err| err.into_inner())
 }
 
-// shortcut: roots are the compile-time linux/ folder, switch to the exe dir when we package
 fn tool_root(name: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join(name)
+    crate::paths::root().join(name)
 }
 
 fn wine_bin() -> PathBuf {

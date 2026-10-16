@@ -59,9 +59,7 @@ pub fn check(progress: &dyn Fn(&str, u8)) -> Result<Option<PathBuf>, String> {
     let name = Path::new(&asset.name)
         .file_name()
         .ok_or_else(|| "nome do arquivo inválido".to_string())?;
-    let dest = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../update")
-        .join(name);
+    let dest = crate::paths::root().join("update").join(name);
     crate::wine::download_file(
         &asset.browser_download_url,
         &dest,

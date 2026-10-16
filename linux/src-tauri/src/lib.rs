@@ -1,4 +1,5 @@
 mod discord;
+mod paths;
 mod runtime;
 mod settings;
 mod update;

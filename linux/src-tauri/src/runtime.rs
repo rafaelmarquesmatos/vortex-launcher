@@ -60,11 +60,8 @@ fn needs_update(local: Option<&str>, remote: &str, exe_exists: bool) -> bool {
     !exe_exists || local.map(str::trim) != Some(remote)
 }
 
-// shortcut: roots are the compile-time linux/ folder, switch to the exe dir when we package
 fn product_root(product: Product) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join(product.dir_name())
+    crate::paths::root().join(product.dir_name())
 }
 
 #[derive(Deserialize)]
