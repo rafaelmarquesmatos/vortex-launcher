@@ -23,8 +23,6 @@ pub struct Settings {
     pub fsync: bool,
     #[serde(default)]
     pub gamemode: bool,
-    #[serde(default)]
-    pub discord_client_id: String,
 }
 
 impl Default for Settings {
@@ -38,7 +36,6 @@ impl Default for Settings {
             esync: true,
             fsync: true,
             gamemode: false,
-            discord_client_id: String::new(),
         }
     }
 }
@@ -92,7 +89,6 @@ pub fn update_from_query(settings: &mut Settings, query: &str) {
             "esync" => settings.esync = on,
             "fsync" => settings.fsync = on,
             "gamemode" => settings.gamemode = on,
-            "discord" => settings.discord_client_id = digits(value),
             _ => {}
         }
     }
@@ -121,10 +117,6 @@ fn doctor_html() -> String {
         .collect()
 }
 
-fn digits(value: &str) -> String {
-    value.chars().filter(|c| c.is_ascii_digit()).collect()
-}
-
 fn checked(on: bool) -> &'static str {
     if on { "checked" } else { "" }
 }
@@ -138,7 +130,6 @@ pub fn page(settings: &Settings) -> String {
     let esync = checked(settings.esync);
     let fsync = checked(settings.fsync);
     let gamemode = checked(settings.gamemode);
-    let discord = &settings.discord_client_id;
     let version = crate::update::VERSION;
     let doctor = doctor_html();
     format!(
@@ -179,7 +170,6 @@ pub fn page(settings: &Settings) -> String {
     background: #fff;
     transition: transform 0.15s ease;
   }}
-  input[type=text] {{ margin-top: 8px; width: 100%; max-width: 280px; box-sizing: border-box; background: #0c0e13; color: #eee; border: 1px solid #3a4150; border-radius: 6px; padding: 8px 10px; font: 14px sans-serif; }}
   .switch:checked {{ background: #4c8dff; }}
   .switch:checked::after {{ transform: translateX(18px); }}
   nav {{ position: fixed; bottom: 0; left: 0; right: 0; height: 40px; display: flex; gap: 8px; align-items: center; padding: 0 12px; background: #0c0e13; }}
@@ -195,16 +185,14 @@ pub fn page(settings: &Settings) -> String {
   <label class="row"><input id="studio" class="switch" type="checkbox" {studio}><span class="copy"><span>Fechar o launcher ao abrir o Studio</span><span class="desc">Esconde a janela quando o Studio abre e mostra de novo quando ele fecha.</span></span></label>
   <label class="row"><input id="open" class="switch" type="checkbox" {open}><span class="copy"><span>Ao sair da partida, fechar o Vortex e voltar ao launcher</span><span class="desc">Depois de uma partida, fecha o Vortex e traz o launcher de volta.</span></span></label>
   <h2>Gráficos</h2>
-  <label class="row"><input id="vulkan" class="switch" type="checkbox" {vulkan}><span class="copy"><span>Vulkan</span><span class="desc">O client prefere Vulkan. O Direct3D 12 passa pelo vkd3d-proton.</span></span></label>
-  <label class="row"><input id="dxvk" class="switch" type="checkbox" {dxvk}><span class="copy"><span>DXVK</span><span class="desc">Traduz Direct3D 11 para Vulkan e instala o vkd3d-proton no prefixo.</span></span></label>
+  <label class="row"><input id="vulkan" class="switch" type="checkbox" {vulkan}><span class="copy"><span>Vulkan</span><span class="desc">O client desenha com Vulkan e deixa o Direct3D 12 desligado.</span></span></label>
+  <label class="row"><input id="dxvk" class="switch" type="checkbox" {dxvk}><span class="copy"><span>DXVK</span><span class="desc">Traduz Direct3D 11 para Vulkan dentro do prefixo.</span></span></label>
   <h2>Wine</h2>
   <label class="row"><input id="esync" class="switch" type="checkbox" {esync}><span class="copy"><span>Esync</span><span class="desc">Sincroniza o Wine por eventfd. Serve na maior parte dos kernels.</span></span></label>
   <label class="row"><input id="fsync" class="switch" type="checkbox" {fsync}><span class="copy"><span>Fsync</span><span class="desc">Sincroniza o Wine por futex. Precisa de um kernel com futex2.</span></span></label>
   <label class="row"><input id="gamemode" class="switch" type="checkbox" {gamemode}><span class="copy"><span>GameMode</span><span class="desc">Precisa do pacote gamemode. Sem o binário, o jogo abre na mesma.</span></span></label>
   <h2>Atualização</h2>
   <p class="desc">Versão {version}. Ao abrir, o launcher procura uma release mais nova no GitHub.</p>
-  <h2>Discord</h2>
-  <label class="row"><span></span><span class="copy"><span>Client ID</span><span class="desc">Vazio, a presença fica desligada. Preenchido, o Discord mostra o jogo.</span><input id="discord" type="text" value="{discord}" inputmode="numeric"></span></label>
   <h2>Doctor</h2>
   {doctor}
 </main>
@@ -215,16 +203,14 @@ pub fn page(settings: &Settings) -> String {
 <script>
   function save() {{
     const ids = ['close', 'studio', 'open', 'vulkan', 'dxvk', 'esync', 'fsync', 'gamemode'];
-    const discord = encodeURIComponent(document.getElementById('discord').value.trim());
     const query = ids.map((id) => id + '=' + (document.getElementById(id).checked ? '1' : '0')).join('&');
     setTimeout(() => {{
-      location.href = 'launcher://localhost/?' + query + '&discord=' + discord;
+      location.href = 'launcher://localhost/?' + query;
     }}, 180);
   }}
   for (const id of ['close', 'studio', 'open', 'vulkan', 'dxvk', 'esync', 'fsync', 'gamemode']) {{
     document.getElementById(id).onchange = save;
   }}
-  document.getElementById('discord').onchange = save;
 </script>
 </body>
 </html>"#
@@ -249,14 +235,13 @@ mod tests {
     #[test]
     fn old_file_enables_graphics() {
         let settings: Settings = serde_json::from_str(
-            r#"{"close_launcher_on_instance":true,"open_client_on_instance_exit":true}"#,
+            r#"{"close_launcher_on_instance":true,"open_client_on_instance_exit":true,"discord_client_id":"123"}"#,
         )
         .unwrap();
         assert!(settings.close_launcher_on_instance);
         assert!(settings.open_client_on_instance_exit);
         assert!(!settings.close_launcher_on_studio);
         assert!(!settings.gamemode);
-        assert!(settings.discord_client_id.is_empty());
         assert!(settings.vulkan && settings.dxvk && settings.esync && settings.fsync);
     }
 
@@ -281,14 +266,12 @@ mod tests {
     }
 
     #[test]
-    fn query_sets_gamemode_and_discord_id() {
+    fn query_sets_gamemode() {
         let mut settings = Settings::default();
-        update_from_query(&mut settings, "gamemode=1&discord=12345abc");
+        update_from_query(&mut settings, "gamemode=1&discord=12345");
         assert!(settings.gamemode);
-        assert_eq!(settings.discord_client_id, "12345");
-        update_from_query(&mut settings, "discord=");
-        assert!(settings.gamemode);
-        assert!(settings.discord_client_id.is_empty());
+        update_from_query(&mut settings, "gamemode=0");
+        assert!(!settings.gamemode);
     }
 
     #[test]

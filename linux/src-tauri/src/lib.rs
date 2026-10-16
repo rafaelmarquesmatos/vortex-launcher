@@ -1,4 +1,3 @@
-mod discord;
 mod doctor;
 mod paths;
 mod runtime;
@@ -102,7 +101,6 @@ pub fn run() {
                     }
                 })
                 .build()?;
-            discord::start();
             if prepare_wine {
                 let boot = main.app_handle().clone();
                 std::thread::spawn(move || prepare_wine_then_open(boot));
@@ -254,7 +252,6 @@ fn spawn_launch<R: tauri::Runtime>(handle: tauri::AppHandle<R>, url: String, ins
                 return;
             }
         };
-        discord::playing(&discord::details_for(&url));
         if instance {
             let current = settings::load();
             if current.close_launcher_on_instance {
@@ -274,7 +271,6 @@ fn spawn_launch<R: tauri::Runtime>(handle: tauri::AppHandle<R>, url: String, ins
             if current.close_launcher_on_instance || current.open_client_on_instance_exit {
                 show_main(&handle);
             }
-            discord::idle();
             return;
         }
         let current = settings::load();
@@ -285,7 +281,6 @@ fn spawn_launch<R: tauri::Runtime>(handle: tauri::AppHandle<R>, url: String, ins
         if current.close_launcher_on_studio {
             show_main(&handle);
         }
-        discord::idle();
     });
 }
 
