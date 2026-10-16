@@ -4,6 +4,7 @@ Thumbs.db
 *~
 .env
 .env.*
+docs/
 
 linux/node_modules/
 linux/src-tauri/target/
