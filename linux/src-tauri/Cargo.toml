@@ -1,14 +1,10 @@
 [package]
 name = "app"
-version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
-license = ""
-repository = ""
+version = "0.1.1"
+description = "Launcher Linux para o Vortex"
+repository = "https://github.com/rafaelmarquesmatos/vortex-launcher"
 edition = "2024"
 rust-version = "1.90"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
 name = "app_lib"

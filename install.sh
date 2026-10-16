@@ -47,8 +47,77 @@ print(ranked[0][0][2], file=sys.stderr)
 '
 }
 
+# shortcut: estes quatro caminhos se o ldconfig não listar a lib; alarga se a distro usar outro diretório.
+# WEBKIT_LDCONFIG, quando definida, substitui `ldconfig -p` (só para --self-check).
+has_webkit4_1() {
+  local listing="" ld="" path
+  if [ -n "${WEBKIT_LDCONFIG+x}" ]; then
+    listing="$WEBKIT_LDCONFIG"
+  else
+    ld="$(command -v ldconfig 2>/dev/null || true)"
+    if [ -z "$ld" ]; then
+      if [ -x /usr/sbin/ldconfig ]; then
+        ld=/usr/sbin/ldconfig
+      elif [ -x /sbin/ldconfig ]; then
+        ld=/sbin/ldconfig
+      fi
+    fi
+    if [ -n "$ld" ]; then
+      listing="$("$ld" -p 2>/dev/null || true)"
+    fi
+  fi
+  if printf '%s\n' "$listing" | grep -q 'libwebkit2gtk-4\.1\.so'; then
+    return 0
+  fi
+  if [ -n "${WEBKIT_LDCONFIG+x}" ]; then
+    return 1
+  fi
+  for path in \
+    /usr/lib64/libwebkit2gtk-4.1.so.0 \
+    /usr/lib/x86_64-linux-gnu/libwebkit2gtk-4.1.so.0 \
+    /usr/lib/aarch64-linux-gnu/libwebkit2gtk-4.1.so.0 \
+    /usr/lib/libwebkit2gtk-4.1.so.0
+  do
+    if [ -e "$path" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+require_webkit() {
+  if has_webkit4_1; then
+    return 0
+  fi
+  cat >&2 <<'EOF'
+Falta o WebKitGTK 4.1. Instala o pacote da tua distro e corre o instalador outra vez:
+  Debian/Ubuntu: libwebkit2gtk-4.1-0
+  Fedora: webkit2gtk4.1
+  Arch: webkit2gtk-4.1
+EOF
+  exit 1
+}
+
 if [ "${1:-}" = "--pick-url" ]; then
   pick_url
+  exit 0
+fi
+
+if [ "${1:-}" = "--self-check" ]; then
+  fail=0
+  WEBKIT_LDCONFIG='libwebkit2gtk-4.1.so.0 (libc6,x86-64) => /usr/lib64/libwebkit2gtk-4.1.so.0'
+  has_webkit4_1 || fail=1
+  WEBKIT_LDCONFIG='libwebkit2gtk-4.0.so.37 (libc6,x86-64) => /usr/lib/libwebkit2gtk-4.0.so.37'
+  has_webkit4_1 && fail=1
+  WEBKIT_LDCONFIG='libwebkit2gtk-4.10.so.0 (libc6,x86-64) => /usr/lib/libwebkit2gtk-4.10.so.0'
+  has_webkit4_1 && fail=1
+  WEBKIT_LDCONFIG=''
+  has_webkit4_1 && fail=1
+  if [ "$fail" -ne 0 ]; then
+    echo "self-check do WebKit falhou" >&2
+    exit 1
+  fi
+  echo "self-check ok"
   exit 0
 fi
 
@@ -60,6 +129,7 @@ if ! command -v python3 >/dev/null 2>&1; then
   echo "Falta o python3 para ler a release." >&2
   exit 1
 fi
+require_webkit
 
 echo "A procurar a última release…"
 if ! json="$(curl -fsSL -H "Accept: application/vnd.github+json" -H "User-Agent: VortexLauncher" "$api")"; then

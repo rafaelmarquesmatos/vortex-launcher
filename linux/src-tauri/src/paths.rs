@@ -63,7 +63,12 @@ mod tests {
 
     #[test]
     fn installed_copy_uses_xdg_then_home() {
-        let xdg = choose_root(None, None, Some("/xdg".as_ref()), Some("/home/mark".as_ref()));
+        let xdg = choose_root(
+            None,
+            None,
+            Some("/xdg".as_ref()),
+            Some("/home/mark".as_ref()),
+        );
         assert_eq!(xdg, Path::new("/xdg/vortex-launcher"));
         let home = choose_root(None, None, None, Some("/home/mark".as_ref()));
         assert_eq!(home, Path::new("/home/mark/.local/share/vortex-launcher"));

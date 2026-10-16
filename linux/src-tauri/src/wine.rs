@@ -10,7 +10,8 @@ use crate::settings::Settings;
 const WINE_URL: &str = "https://github.com/Kron4ek/Wine-Builds/releases/download/11.19/wine-11.19-staging-amd64-wow64.tar.xz";
 const WINE_SHA: &str = "c89f69cf22f6664e3791210fa3b40c6e9e6d2e27a9aaa466f5a26d9c56664a09";
 const WINE_DIR: &str = "wine-11.19-staging-amd64-wow64";
-const DXVK_URL: &str = "https://github.com/doitsujin/dxvk/releases/download/v3.1.1/dxvk-3.1.1.tar.gz";
+const DXVK_URL: &str =
+    "https://github.com/doitsujin/dxvk/releases/download/v3.1.1/dxvk-3.1.1.tar.gz";
 const DXVK_SHA: &str = "40565b4a724aadc4433fa4e010b4b23916d9b1f1baeee64e17186db94f54e608";
 const DXVK_VERSION: &str = "3.1.1";
 const XZ_MAGIC: &[u8] = &[0xfd, b'7', b'z', b'X', b'Z', 0x00];
@@ -42,7 +43,9 @@ pub fn installed() -> bool {
 }
 
 fn dxvk_dlls() -> PathBuf {
-    tool_root("dxvk").join(format!("dxvk-{DXVK_VERSION}")).join("x64")
+    tool_root("dxvk")
+        .join(format!("dxvk-{DXVK_VERSION}"))
+        .join("x64")
 }
 
 pub fn binary(progress: &dyn Fn(&str, u8)) -> Result<PathBuf, String> {
@@ -383,7 +386,10 @@ fn extract(archive: &Path, dest: &Path, gzip: bool) -> Result<(), String> {
     if output.status.success() {
         Ok(())
     } else {
-        Err(format!("tar: {}", String::from_utf8_lossy(&output.stderr).trim()))
+        Err(format!(
+            "tar: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ))
     }
 }
 
@@ -397,7 +403,7 @@ fn percent(done: u64, total: u64) -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use super::{check_download, percent, win_env, ArchiveKind};
+    use super::{ArchiveKind, check_download, percent, win_env};
     use crate::settings::Settings;
 
     #[test]
@@ -410,13 +416,7 @@ mod tests {
 
     #[test]
     fn xz_and_gzip_magic_pass() {
-        assert!(check_download(
-            6,
-            6,
-            &[0xfd, b'7', b'z', b'X', b'Z', 0],
-            ArchiveKind::Xz
-        )
-        .is_ok());
+        assert!(check_download(6, 6, &[0xfd, b'7', b'z', b'X', b'Z', 0], ArchiveKind::Xz).is_ok());
         assert!(check_download(2, 2, &[0x1f, 0x8b], ArchiveKind::Gzip).is_ok());
     }
 
@@ -467,7 +467,10 @@ mod tests {
             ..Settings::default()
         };
         let env = win_env(&settings);
-        assert!(!env.iter().any(|(key, _)| *key == "WGPU_BACKEND" || *key == "WINEDLLOVERRIDES"));
+        assert!(
+            !env.iter()
+                .any(|(key, _)| *key == "WGPU_BACKEND" || *key == "WINEDLLOVERRIDES")
+        );
         assert!(env.contains(&("WINEESYNC", "0".to_string())));
         assert!(env.contains(&("WINEFSYNC", "0".to_string())));
     }

@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use discord_rich_presence::{activity, DiscordIpc, DiscordIpcClient};
+use discord_rich_presence::{DiscordIpc, DiscordIpcClient, activity};
 
 pub fn start() {
     let id = crate::settings::load().discord_client_id;

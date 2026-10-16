@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-pub const VERSION: &str = "0.1.0";
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 const LATEST: &str =
     "https://api.github.com/repos/rafaelmarquesmatos/vortex-launcher/releases/latest";
 
@@ -79,14 +79,16 @@ fn latest() -> Result<Option<Release>, String> {
         Err(err) => Err(err.to_string()),
         Ok(response) => {
             let body = response.into_string().map_err(|err| err.to_string())?;
-            serde_json::from_str(&body).map(Some).map_err(|err| err.to_string())
+            serde_json::from_str(&body)
+                .map(Some)
+                .map_err(|err| err.to_string())
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{is_newer, linux_asset};
+    use super::{VERSION, is_newer, linux_asset};
 
     #[test]
     fn newer_version_is_numeric() {
@@ -94,6 +96,16 @@ mod tests {
         assert!(is_newer("0.1.0", "v0.1.1"));
         assert!(!is_newer("0.1.0", "0.1.0"));
         assert!(!is_newer("0.2.0", "0.1.9"));
+    }
+
+    #[test]
+    fn version_matches_manifests() {
+        let tauri: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        let pkg: serde_json::Value =
+            serde_json::from_str(include_str!("../../package.json")).unwrap();
+        assert_eq!(tauri["version"].as_str(), Some(VERSION));
+        assert_eq!(pkg["version"].as_str(), Some(VERSION));
     }
 
     #[test]

@@ -22,16 +22,21 @@ Wine, cliente e Studio ficam em `~/.local/share/vortex-launcher`. Quem roda a pa
 - Instala o DXVK no prefixo na primeira vez que um jogo ou o Studio abre.
 - A barra de baixo troca entre o site e a Config.
 
+
+
 ## Requisitos
 
+Para abrir o launcher:
+
 - Linux
-- [Bun](https://bun.sh)
-- Rust stable e as dependências de sistema do [Tauri](https://v2.tauri.app/start/prerequisites/)
+- WebKitGTK 4.1 (`libwebkit2gtk-4.1`). O `install.sh` para se a biblioteca não estiver no sistema.
 - `tar` e `sha256sum`
 
 O pacote `gamemode` é opcional. Sem o binário `gamemoderun`, o jogo abre na mesma.
 
 ## Desenvolvimento
+
+Precisa de [Bun](https://bun.sh), Rust stable e as dependências de sistema do [Tauri](https://v2.tauri.app/start/prerequisites/).
 
 ```bash
 cd linux
@@ -53,7 +58,8 @@ bun run build
 
 ## Config
 
-A página Config guarda as opções em `linux/settings.json`. Esse arquivo fica só na sua máquina.
+A página Config guarda as opções em `settings.json`, na pasta de dados. Quem roda a partir do código usa `linux/`. A cópia instalada usa `~/.local/share/vortex-launcher`. O arquivo fica só na sua máquina.
+
 
 | Grupo       | Opções                                                                                         |
 | ----------- | ---------------------------------------------------------------------------------------------- |
@@ -70,5 +76,4 @@ A página Config guarda as opções em `linux/settings.json`. Esse arquivo fica 
 
 Ao abrir, o launcher pede a última release de [rafaelmarquesmatos/vortex-launcher](https://github.com/rafaelmarquesmatos/vortex-launcher/releases).
 
-Se a tag for mais nova e houver um asset com `linux` no nome (`.AppImage` ou `.tar.gz`), o arquivo vai para `linux/update/`. Sem release, ou com tag igual, não mostra nada.
-
+Se a tag for mais nova e houver um asset com `linux` no nome (`.AppImage` ou `.tar.gz`), o arquivo vai para `update/` na mesma pasta de dados. Sem release, ou com tag igual, não mostra nada.

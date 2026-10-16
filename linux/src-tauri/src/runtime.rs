@@ -1,5 +1,5 @@
 use std::fs::{self, File};
-use std::io::{copy, Read, Seek, SeekFrom};
+use std::io::{Read, Seek, SeekFrom, copy};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
@@ -164,32 +164,33 @@ fn ensure_installed(product: Product, progress: &dyn Fn(&str, u8)) -> Result<Pat
     Ok(exe)
 }
 
-pub fn is_download_page(url: &str) -> bool {
-    let Some(rest) = url.split("://").nth(1) else {
-        return false;
-    };
+fn playvortex_path(url: &str) -> Option<&str> {
+    let rest = url.split("://").nth(1)?;
     let (host_port, path) = rest.split_once('/').unwrap_or((rest, ""));
     let host = host_port.split('@').next_back().unwrap_or(host_port);
     let host = host.split(':').next().unwrap_or(host);
     if host != "playvortex.io" && host != "www.playvortex.io" {
-        return false;
+        return None;
     }
-    let path = path.split('#').next().unwrap_or(path);
-    path == "download" || path == "download/" || path.starts_with("download?")
+    Some(path.split('#').next().unwrap_or(path))
+}
+
+pub fn is_download_page(url: &str) -> bool {
+    match playvortex_path(url) {
+        Some(path) => path == "download" || path == "download/" || path.starts_with("download?"),
+        None => false,
+    }
 }
 
 pub fn is_studio_launch_page(url: &str) -> bool {
-    let Some(rest) = url.split("://").nth(1) else {
-        return false;
-    };
-    let (host_port, path) = rest.split_once('/').unwrap_or((rest, ""));
-    let host = host_port.split('@').next_back().unwrap_or(host_port);
-    let host = host.split(':').next().unwrap_or(host);
-    if host != "playvortex.io" && host != "www.playvortex.io" {
-        return false;
+    match playvortex_path(url) {
+        Some(path) => {
+            path == "studio/launch"
+                || path == "studio/launch/"
+                || path.starts_with("studio/launch?")
+        }
+        None => false,
     }
-    let path = path.split('#').next().unwrap_or(path);
-    path == "studio/launch" || path == "studio/launch/" || path.starts_with("studio/launch?")
 }
 
 pub fn launch(url: &str, progress: &dyn Fn(&str, u8)) -> Result<Child, String> {
@@ -274,7 +275,10 @@ impl LogCursor {
             Ok(file) => file,
             Err(_) => return false,
         };
-        let len = file.metadata().map(|meta| meta.len()).unwrap_or(self.offset);
+        let len = file
+            .metadata()
+            .map(|meta| meta.len())
+            .unwrap_or(self.offset);
         if len < self.offset {
             self.offset = 0;
         }
@@ -289,7 +293,9 @@ impl LogCursor {
             return false;
         }
         self.offset = len;
-        chunk.lines().any(|line| note_log_line(&mut self.seen_game, line))
+        chunk
+            .lines()
+            .any(|line| note_log_line(&mut self.seen_game, line))
     }
 }
 
@@ -306,7 +312,11 @@ fn newest_vortex_log() -> Option<PathBuf> {
             let Ok(modified) = entry.metadata().and_then(|meta| meta.modified()) else {
                 continue;
             };
-            if best.as_ref().map(|(time, _)| modified > *time).unwrap_or(true) {
+            if best
+                .as_ref()
+                .map(|(time, _)| modified > *time)
+                .unwrap_or(true)
+            {
                 best = Some((modified, entry.path()));
             }
         }
@@ -325,7 +335,7 @@ pub fn stop_client(child: &mut Child) {
 
 #[cfg(test)]
 mod tests {
-    use super::{launch_scheme, needs_update, use_gamemode, Product};
+    use super::{Product, launch_scheme, needs_update, use_gamemode};
 
     #[test]
     fn missing_install_needs_update() {
@@ -350,7 +360,9 @@ mod tests {
     #[test]
     fn download_page_is_studio_fallback() {
         assert!(super::is_download_page("https://playvortex.io/download"));
-        assert!(super::is_download_page("https://www.playvortex.io/download/"));
+        assert!(super::is_download_page(
+            "https://www.playvortex.io/download/"
+        ));
         assert!(super::is_download_page(
             "https://playvortex.io/download?from=studio"
         ));
@@ -377,7 +389,10 @@ mod tests {
     #[test]
     fn lobby_after_game_closes_client() {
         let mut seen = false;
-        assert!(!super::note_log_line(&mut seen, "couldnt parse the launch url"));
+        assert!(!super::note_log_line(
+            &mut seen,
+            "couldnt parse the launch url"
+        ));
         assert!(!super::note_log_line(
             &mut seen,
             "verified user 1 for game 6"

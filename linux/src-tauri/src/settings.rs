@@ -219,7 +219,7 @@ pub fn page(settings: &Settings) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{update_from_query, Settings};
+    use super::{Settings, update_from_query};
 
     #[test]
     fn query_sets_both_toggles() {
