@@ -17,7 +17,6 @@ const DXVK_VERSION: &str = "3.1.1";
 const XZ_MAGIC: &[u8] = &[0xfd, b'7', b'z', b'X', b'Z', 0x00];
 const GZIP_MAGIC: &[u8] = &[0x1f, 0x8b];
 const ZIP_MAGIC: &[u8] = &[b'P', b'K', 3, 4];
-const ZST_MAGIC: &[u8] = &[0x28, 0xb5, 0x2f, 0xfd];
 
 static DOWNLOAD: Mutex<()> = Mutex::new(());
 
@@ -25,7 +24,6 @@ pub(crate) enum ArchiveKind {
     Xz,
     Gzip,
     Zip,
-    Zst,
 }
 
 pub(crate) fn lock_download() -> MutexGuard<'static, ()> {
@@ -97,6 +95,8 @@ pub fn prepare_prefix(
     if settings.dxvk {
         install_dxvk(prefix, progress)?;
     }
+    // XIM keeps the keydown and drops WM_CHAR, so chat and scripts never get letters.
+    disable_xim(wine_bin, prefix)?;
     Ok(())
 }
 
@@ -191,6 +191,39 @@ fn ensure_dxvk_files(progress: &dyn Fn(&str, u8)) -> Result<PathBuf, String> {
     } else {
         Err("DXVK em falta depois de extrair".to_string())
     }
+}
+
+fn disable_xim(wine_bin: &Path, prefix: &Path) -> Result<(), String> {
+    let stamp = prefix.join("no-xim");
+    if stamp.is_file() {
+        return Ok(());
+    }
+    let output = Command::new(wine_bin)
+        .args([
+            "reg",
+            "add",
+            r"HKCU\Software\Wine\X11 Driver",
+            "/v",
+            "UseXIM",
+            "/t",
+            "REG_SZ",
+            "/d",
+            "N",
+            "/f",
+        ])
+        .env("WINEPREFIX", prefix)
+        .env("WINEDEBUG", "-all")
+        .env("PATH", path_env(wine_bin))
+        .stdin(std::process::Stdio::null())
+        .output()
+        .map_err(|err| format!("reg: {err}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "reg: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    fs::write(&stamp, "1").map_err(|err| err.to_string())
 }
 
 fn wineboot(wine_bin: &Path, prefix: &Path) -> Result<(), String> {
@@ -296,7 +329,6 @@ fn check_download(done: u64, total: u64, header: &[u8], kind: ArchiveKind) -> Re
         ArchiveKind::Xz => header.starts_with(XZ_MAGIC),
         ArchiveKind::Gzip => header.starts_with(GZIP_MAGIC),
         ArchiveKind::Zip => header.starts_with(ZIP_MAGIC),
-        ArchiveKind::Zst => header.starts_with(ZST_MAGIC),
     };
     if ok {
         Ok(())
@@ -379,14 +411,12 @@ fn sha256(path: &Path) -> Result<String, String> {
 
 fn extract(archive: &Path, dest: &Path, kind: ArchiveKind) -> Result<(), String> {
     fs::create_dir_all(dest).map_err(|err| err.to_string())?;
-    // shortcut: zstd via `tar -xf`; needs a tar that opens zst, which Fedora has
     let flag = match kind {
         ArchiveKind::Xz => "-xJf",
         ArchiveKind::Gzip => "-xzf",
         ArchiveKind::Zip => {
             return Err("zip não se extrai com tar".to_string());
         }
-        ArchiveKind::Zst => "-xf",
     };
     let output = Command::new("tar")
         .arg(flag)
@@ -430,7 +460,6 @@ mod tests {
     fn xz_and_gzip_magic_pass() {
         assert!(check_download(6, 6, &[0xfd, b'7', b'z', b'X', b'Z', 0], ArchiveKind::Xz).is_ok());
         assert!(check_download(2, 2, &[0x1f, 0x8b], ArchiveKind::Gzip).is_ok());
-        assert!(check_download(4, 4, &[0x28, 0xb5, 0x2f, 0xfd], ArchiveKind::Zst).is_ok());
     }
 
     #[test]

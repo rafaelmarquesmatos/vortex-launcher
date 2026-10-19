@@ -1,8 +1,10 @@
 # Vortex Launcher
 
-Launcher Linux para o [Vortex](https://playvortex.io). Abre o site numa janela e roda o cliente e o Studio com Wine.
+Launcher Linux para o [Vortex](https://playvortex.io) e para o Vortex Studio. Abre o site numa janela e roda o cliente e o Studio com Wine.
 
 ![Site do Vortex no launcher](screenshots/site.png)
+
+![Vortex Studio aberto pelo launcher](screenshots/studio.png)
 
 ## Instalação
 

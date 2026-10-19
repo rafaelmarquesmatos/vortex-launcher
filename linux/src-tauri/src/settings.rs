@@ -23,6 +23,8 @@ pub struct Settings {
     pub fsync: bool,
     #[serde(default)]
     pub gamemode: bool,
+    #[serde(default = "default_on")]
+    pub wayland: bool,
 }
 
 impl Default for Settings {
@@ -36,6 +38,7 @@ impl Default for Settings {
             esync: true,
             fsync: true,
             gamemode: false,
+            wayland: true,
         }
     }
 }
@@ -89,6 +92,7 @@ pub fn update_from_query(settings: &mut Settings, query: &str) {
             "esync" => settings.esync = on,
             "fsync" => settings.fsync = on,
             "gamemode" => settings.gamemode = on,
+            "wayland" => settings.wayland = on,
             _ => {}
         }
     }
@@ -130,6 +134,7 @@ pub fn page(settings: &Settings) -> String {
     let esync = checked(settings.esync);
     let fsync = checked(settings.fsync);
     let gamemode = checked(settings.gamemode);
+    let wayland = checked(settings.wayland);
     let version = crate::update::VERSION;
     let doctor = doctor_html();
     format!(
@@ -191,6 +196,7 @@ pub fn page(settings: &Settings) -> String {
   <label class="row"><input id="esync" class="switch" type="checkbox" {esync}><span class="copy"><span>Esync</span><span class="desc">Sincroniza o Wine por eventfd. Serve na maior parte dos kernels.</span></span></label>
   <label class="row"><input id="fsync" class="switch" type="checkbox" {fsync}><span class="copy"><span>Fsync</span><span class="desc">Sincroniza o Wine por futex. Precisa de um kernel com futex2.</span></span></label>
   <label class="row"><input id="gamemode" class="switch" type="checkbox" {gamemode}><span class="copy"><span>GameMode</span><span class="desc">Precisa do pacote gamemode. Sem o binário, o jogo abre na mesma.</span></span></label>
+  <label class="row"><input id="wayland" class="switch" type="checkbox" {wayland}><span class="copy"><span>Wayland</span><span class="desc">Abre o Wine no Wayland, para as letras aparecerem. As teclas de movimento continuam chegando no jogo e no Studio.</span></span></label>
   <h2>Atualização</h2>
   <p class="desc">Versão {version}. Ao abrir, o launcher procura uma release mais nova no GitHub.</p>
   <h2>Doctor</h2>
@@ -202,13 +208,13 @@ pub fn page(settings: &Settings) -> String {
 </nav>
 <script>
   function save() {{
-    const ids = ['close', 'studio', 'open', 'vulkan', 'dxvk', 'esync', 'fsync', 'gamemode'];
+    const ids = ['close', 'studio', 'open', 'vulkan', 'dxvk', 'esync', 'fsync', 'gamemode', 'wayland'];
     const query = ids.map((id) => id + '=' + (document.getElementById(id).checked ? '1' : '0')).join('&');
     setTimeout(() => {{
       location.href = 'launcher://localhost/?' + query;
     }}, 180);
   }}
-  for (const id of ['close', 'studio', 'open', 'vulkan', 'dxvk', 'esync', 'fsync', 'gamemode']) {{
+  for (const id of ['close', 'studio', 'open', 'vulkan', 'dxvk', 'esync', 'fsync', 'gamemode', 'wayland']) {{
     document.getElementById(id).onchange = save;
   }}
 </script>
@@ -243,6 +249,7 @@ mod tests {
         assert!(!settings.close_launcher_on_studio);
         assert!(!settings.gamemode);
         assert!(settings.vulkan && settings.dxvk && settings.esync && settings.fsync);
+        assert!(settings.wayland);
     }
 
     #[test]
@@ -275,8 +282,20 @@ mod tests {
     }
 
     #[test]
+    fn query_sets_wayland() {
+        let mut settings = Settings::default();
+        assert!(settings.wayland);
+        update_from_query(&mut settings, "wayland=0");
+        assert!(!settings.wayland);
+        update_from_query(&mut settings, "wayland=1");
+        assert!(settings.wayland);
+    }
+
+    #[test]
     fn config_has_doctor() {
         let html = super::page(&Settings::default());
+        assert!(html.contains("no Studio"));
+        assert!(!html.contains("test-go"));
         assert!(html.contains("<h2>Doctor</h2>"));
         assert!(
             html.contains("Nada em falta.")

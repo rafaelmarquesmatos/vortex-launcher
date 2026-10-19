@@ -169,8 +169,9 @@ fn take_url<R: tauri::Runtime>(handle: &tauri::AppHandle<R>, url: &str) -> bool 
         spawn_launch(handle.clone(), "vortex-studio://".to_string(), false);
         return true;
     }
-    if runtime::launch_scheme(url).is_some() {
-        open_url(handle, url);
+    let url = runtime::normalize_launch_url(url);
+    if runtime::launch_scheme(&url).is_some() {
+        open_url(handle, &url);
         return true;
     }
     false

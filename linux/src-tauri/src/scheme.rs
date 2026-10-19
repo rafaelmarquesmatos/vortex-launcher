@@ -17,9 +17,10 @@ pub struct Primary {
 }
 
 pub fn claim() -> Primary {
-    let pending = std::env::args()
-        .skip(1)
-        .find(|arg| crate::runtime::launch_scheme(arg).is_some());
+    let pending = std::env::args().skip(1).find_map(|arg| {
+        let url = crate::runtime::normalize_launch_url(&arg);
+        crate::runtime::launch_scheme(&url).map(|_| url)
+    });
     let sock = socket_path();
     let line = pending.clone().unwrap_or_else(|| "focus".to_string());
     if try_forward(&sock, &line) {
@@ -97,8 +98,9 @@ pub fn parse_line(line: &str) -> Option<Incoming> {
     if line == "focus" {
         return Some(Incoming::Focus);
     }
-    if crate::runtime::launch_scheme(line).is_some() {
-        return Some(Incoming::Launch(line.to_string()));
+    let url = crate::runtime::normalize_launch_url(line);
+    if crate::runtime::launch_scheme(&url).is_some() {
+        return Some(Incoming::Launch(url));
     }
     None
 }
@@ -168,6 +170,10 @@ mod tests {
         assert!(matches!(
             parse_line("vortex://play/1"),
             Some(Incoming::Launch(url)) if url == "vortex://play/1"
+        ));
+        assert!(matches!(
+            parse_line(r#"window.location = "vortex://play?game=15\u0026token=abc""#),
+            Some(Incoming::Launch(url)) if url == "vortex://play?game=15&token=abc"
         ));
         assert!(matches!(
             parse_line("vortex-studio://edit/1"),

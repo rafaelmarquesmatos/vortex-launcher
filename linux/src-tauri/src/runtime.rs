@@ -46,6 +46,15 @@ impl Product {
     }
 }
 
+pub fn normalize_launch_url(url: &str) -> String {
+    let mut raw = url.trim();
+    if let Some(start) = raw.find("vortex://").or_else(|| raw.find("vortex-studio://")) {
+        raw = &raw[start..];
+    }
+    let end = raw.find(['"', '\'', '\n']).unwrap_or(raw.len());
+    raw[..end].replace(r"\u0026", "&")
+}
+
 pub fn launch_scheme(url: &str) -> Option<Product> {
     if url.starts_with("vortex-studio://") {
         Some(Product::Studio)
@@ -194,7 +203,8 @@ pub fn is_studio_launch_page(url: &str) -> bool {
 }
 
 pub fn launch(url: &str, progress: &dyn Fn(&str, u8)) -> Result<Child, String> {
-    let product = launch_scheme(url).ok_or_else(|| format!("not a launch url: {url}"))?;
+    let url = normalize_launch_url(url);
+    let product = launch_scheme(&url).ok_or_else(|| format!("not a launch url: {url}"))?;
     let settings = crate::settings::load();
     let wine_bin = crate::wine::binary(progress)?;
     let exe = ensure_installed(product, progress)?;
@@ -205,7 +215,7 @@ pub fn launch(url: &str, progress: &dyn Fn(&str, u8)) -> Result<Child, String> {
     let mut command = wine_command(&wine_bin, settings.gamemode);
     command
         .arg(&exe)
-        .arg(url)
+        .arg(&url)
         .env("WINEPREFIX", &prefix)
         .env("PATH", crate::wine::path_env(&wine_bin))
         .stdin(std::process::Stdio::null())
@@ -213,10 +223,78 @@ pub fn launch(url: &str, progress: &dyn Fn(&str, u8)) -> Result<Child, String> {
     for (key, value) in crate::wine::win_env(&settings) {
         command.env(key, value);
     }
+    if settings.wayland {
+        // winewayland is used only when X11 cannot open a display.
+        command.env_remove("DISPLAY");
+        // KWin delivers printable keys to the input method while text-input-v3
+        // is enabled. Wine enables it for the whole window, so chat works and
+        // WASD never arrives as a key. Hide that protocol. Letters still come
+        // from the XKB layout Wine builds on Wayland.
+        match keyfix_library() {
+            Some(so) => {
+                command.env("VORTEX_HIDE_TEXT_INPUT", "1");
+                let preload = prepend_preload(std::env::var("LD_PRELOAD").ok(), &so);
+                command.env("LD_PRELOAD", preload);
+            }
+            None => log::warn!("wayland keyfix missing at {}", env!("VORTEX_KEYFIX")),
+        }
+    }
     if let Some(dir) = exe.parent() {
         command.current_dir(dir);
     }
     command.spawn().map_err(|err| format!("wine: {err}"))
+}
+
+fn keyfix_library() -> Option<PathBuf> {
+    let source = PathBuf::from(env!("VORTEX_KEYFIX"));
+    if !source.is_file() {
+        return None;
+    }
+    // ld.so splits LD_PRELOAD on spaces and colons. The project path contains
+    // a space, so the library has to live somewhere else before Wine starts.
+    let dest_dir = keyfix_install_dir()?;
+    fs::create_dir_all(&dest_dir).ok()?;
+    let dest = dest_dir.join("libvortex_keyfix.so");
+    if !preload_path_ok(&dest) {
+        return None;
+    }
+    let stale = match (dest.metadata(), source.metadata()) {
+        (Ok(current), Ok(source_meta)) => {
+            source_meta.modified().ok()? > current.modified().ok()?
+        }
+        _ => true,
+    };
+    if stale && fs::copy(&source, &dest).is_err() && !dest.is_file() {
+        return None;
+    }
+    dest.is_file().then_some(dest)
+}
+
+fn keyfix_install_dir() -> Option<PathBuf> {
+    let from_xdg = std::env::var_os("XDG_DATA_HOME").map(PathBuf::from);
+    let from_home = std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share"));
+    for base in [from_xdg, from_home].into_iter().flatten() {
+        let dir = base.join("vortex-launcher");
+        if preload_path_ok(&dir.join("libvortex_keyfix.so")) {
+            return Some(dir);
+        }
+    }
+    let fallback = PathBuf::from("/tmp/vortex-launcher");
+    preload_path_ok(&fallback.join("libvortex_keyfix.so")).then_some(fallback)
+}
+
+fn preload_path_ok(path: &Path) -> bool {
+    match path.to_str() {
+        Some(text) => !text.is_empty() && !text.contains(' ') && !text.contains(':'),
+        None => false,
+    }
+}
+
+fn prepend_preload(existing: Option<String>, library: &Path) -> String {
+    match existing.filter(|value| !value.is_empty()) {
+        Some(previous) => format!("{}:{previous}", library.display()),
+        None => library.display().to_string(),
+    }
 }
 
 fn wine_command(wine_bin: &Path, gamemode: bool) -> Command {
@@ -405,6 +483,20 @@ mod tests {
     }
 
     #[test]
+    fn js_ampersand_becomes_a_query_separator() {
+        assert_eq!(
+            super::normalize_launch_url(r#"vortex://play?game=15\u0026token=abc"#),
+            "vortex://play?game=15&token=abc"
+        );
+        assert_eq!(
+            super::normalize_launch_url(
+                "window.location = \"vortex://play?game=15\\u0026token=abc\""
+            ),
+            "vortex://play?game=15&token=abc"
+        );
+    }
+
+    #[test]
     fn scheme_routes_client_and_studio() {
         assert_eq!(launch_scheme("vortex://play/1"), Some(Product::Client));
         assert_eq!(
@@ -419,5 +511,35 @@ mod tests {
         assert!(!use_gamemode(false, true));
         assert!(!use_gamemode(true, false));
         assert!(use_gamemode(true, true));
+    }
+
+    #[test]
+    fn preload_keeps_an_existing_library() {
+        let path = std::path::Path::new("/opt/vortex/libvortex_keyfix.so");
+        assert_eq!(
+            super::prepend_preload(None, path),
+            "/opt/vortex/libvortex_keyfix.so"
+        );
+        assert_eq!(
+            super::prepend_preload(Some(String::new()), path),
+            "/opt/vortex/libvortex_keyfix.so"
+        );
+        assert_eq!(
+            super::prepend_preload(Some("/usr/lib/other.so".to_string()), path),
+            "/opt/vortex/libvortex_keyfix.so:/usr/lib/other.so"
+        );
+    }
+
+    #[test]
+    fn preload_path_rejects_spaces() {
+        assert!(super::preload_path_ok(std::path::Path::new(
+            "/home/markum/.local/share/vortex-launcher/libvortex_keyfix.so"
+        )));
+        assert!(!super::preload_path_ok(std::path::Path::new(
+            "/home/markum/Documentos/Projects/Private/Vortex Launcher/libvortex_keyfix.so"
+        )));
+        assert!(!super::preload_path_ok(std::path::Path::new(
+            "/tmp/libvortex_keyfix.so:extra"
+        )));
     }
 }
